@@ -1,0 +1,155 @@
+---
+title: "4997 code"
+author: "SuyangYu"
+date: "2024-01-09"
+output:
+  pdf_document: default
+  word_document: default
+  html_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r tidy=TRUE,warning=FALSE,message=FALSE}
+library(readxl)
+library(dplyr)
+BTC = read_excel('C:/Users/yu000/Desktop/Causality Analysis/Stat file/TOP5.xlsx', sheet = 'BTC-USD')[,c('Date','Log_Return')]
+ETH = read_excel("C:/Users/yu000/Desktop/Causality Analysis/Stat file/TOP5.xlsx", sheet = 'ETH-USD')[,c('Date','Log_Return')]
+USDT = read_excel("C:/Users/yu000/Desktop/Causality Analysis/Stat file/TOP5.xlsx", sheet = 'USDT-USD')[,c('Date','Log_Return')]
+BNB = read_excel("C:/Users/yu000/Desktop/Causality Analysis/Stat file/TOP5.xlsx", sheet = 'BNB-USD')[,c('Date','Log_Return')]
+XRP = read_excel("C:/Users/yu000/Desktop/Causality Analysis/Stat file/TOP5.xlsx", sheet = 'XRP-USD')[,c('Date','Log_Return')]
+ADA = read_excel("C:/Users/yu000/Desktop/Causality Analysis/Stat file/TOP5.xlsx", sheet = 'ADA-USD')[,c('Date','Log_Return')]
+LTC = read_excel("C:/Users/yu000/Desktop/Causality Analysis/Stat file/TOP5.xlsx", sheet = 'LTC-USD')[,c('Date','Log_Return')]
+```
+
+```{r tidy=TRUE,warning=FALSE,message=FALSE}
+df=data.frame(BTC$Date,BTC$Log_Return,ETH$Log_Return,USDT$Log_Return,BNB$Log_Return,XRP$Log_Return,ADA$Log_Return,LTC$Log_Return)
+df=df[2:2192,]
+colnames(df)=c("Date" ,"BTC",  "ETH" , "USDT", "BNB" , "XRP" , "ADA" , "LTC")
+```
+
+```{r tidy=TRUE,warning=FALSE,message=FALSE}
+library(psych)
+library(dplyr)
+summary_df=psych::describe(df[,-c(1)])
+summary_df=as.data.frame(summary_df)[,c('mean','sd','min','max','skew','kurtosis')]
+```
+
+## Table1
+
+```{r tidy=TRUE,warning=FALSE,message=FALSE}
+library(tseries)
+tt1=tseries::jarque.bera.test(df$BTC)
+tt2=tseries::jarque.bera.test(df$ETH)
+tt3=tseries::jarque.bera.test(df$USDT)
+tt4=tseries::jarque.bera.test(df$BNB)
+tt5=tseries::jarque.bera.test(df$XRP)
+tt6=tseries::jarque.bera.test(df$ADA)
+tt7=tseries::jarque.bera.test(df$LTC)
+summary_df$jbtest=c(tt1$statistic,tt2$statistic,tt3$statistic,tt4$statistic,tt5$statistic,tt6$statistic,tt7$statistic)
+summary_df$jbpvalue=c(tt1$p.value,tt2$p.value,tt3$p.value,tt4$p.value,tt5$p.value,tt6$p.value,tt7$p.value)
+t(summary_df)
+```
+
+## Table2
+
+```{r tidy=TRUE,warning=FALSE,message=FALSE}
+library(tseries)
+variables <- c("BTC", "ETH", "USDT", "BNB", "XRP", "ADA", "LTC")
+adf_results <- lapply(df[variables], adf.test)
+adf_df <- data.frame(
+  variable = variables,
+  statistic = sapply(adf_results, function(x) x$statistic),
+  pct1level = -3.436111,
+  pct5level = -2.863972,
+  pct10level = -2.568116,
+  Results = ifelse(sapply(adf_results, function(x) x$p.value) < 0.05, 'stationary', 'non-stationary')
+)
+adf_df
+```
+
+## Figure 1
+
+```{r tidy=TRUE,warning=FALSE,message=FALSE}
+library(lubridate)
+library(dplyr)
+library(zoo)
+df1=df
+df1$month=as.yearqtr(df1$Date,           # Convert dates to quarterly
+                                 format = "%Y-%m-%d")
+df_plot=df1%>%group_by(month)%>%summarise(BTC=sum(BTC),
+                                 	ETH=sum(ETH),
+                                 USDT=sum(USDT),
+                                 BNB=sum(BNB),
+                                 XRP=sum(XRP),
+                                 ADA=sum(ADA),
+                                 LTC=sum(LTC),)
+
+```
+
+```{r tidy=TRUE,warning=FALSE,message=FALSE}
+library(ggplot2)
+ggplot(df_plot,aes(x=month))+geom_line(aes(y=BTC,col='BTC'))+geom_line(aes(y=ETH,col='ETH'))+
+  geom_line(aes(y=USDT,col='USDT'))+geom_line(aes(y=BNB,col='BNB'))+
+geom_line(aes(y=XRP,col='XRP'))+geom_line(aes(y=ADA,col='ADA'))+geom_line(aes(y=LTC,col='LTC'))+ labs(col='',x='Date',y='Quarterly Returns')+ scale_y_continuous(labels = scales::percent)
+```
+
+## Figure 2
+
+```{r tidy=TRUE,warning=FALSE,message=FALSE}
+library(corrplot)
+M = cor(df[-c(1)])
+M
+corrplot.mixed(M, order = 'AOE')
+```
+
+## Table3
+
+```{r tidy=TRUE,warning=FALSE,message=FALSE}
+library(lmtest)
+library(dplyr)
+
+res_df <- c()
+for (m in 2:8) {
+  for (n in 2:8) {
+    if (m != n) {
+      dd = grangertest(df[, c(m)] ~ df[, c(n)])
+      res_df <- rbind(res_df, c(colnames(df)[m], colnames(df)[n], dd$F, dd$`Pr(>F)`, ifelse(dd$`Pr(>F)` < 0.01, 'Fail to Reject', 'Reject')))
+    }
+  }
+}
+res_df <- as.data.frame(res_df[, c(1, 2, 4, 6, 8)])
+res_df$Null_Hypothesis <- paste(res_df[, 1], 'is not a Granger cause of changes in', res_df[, 2])
+
+res_df %>%
+  select(Null_Hypothesis, F_Statistic = V3, Probability = V4, Test_Result = V5)
+
+```
+
+## Table4
+
+```{r tidy=TRUE,warning=FALSE,message=FALSE}
+write.csv(df, "C:/Users/yu000/Desktop/Causality Analysis/Stat file/matlab/return.csv")
+```
+
+```{r tidy=TRUE,warning=FALSE,message=FALSE}
+info=read.csv("C:/Users/yu000/Desktop/Causality Analysis/Stat file/matlab/res_info.csv")
+info$INFO=round(info$INFO,3)
+info$err90l=round(info$err90l,3)
+info$value=paste(info$INFO,"$\\pm$",info$err90l)
+```
+
+```{r tidy=TRUE,warning=FALSE,message=FALSE}
+library(reshape2)
+info$flag=ifelse(info$INFO+info$err90l>0,'N','Y')
+final_table=info[c(1,2,8)]%>%dcast(T2~T1)
+knitr::kable(final_table)
+```
+
+```{r tidy=TRUE,warning=FALSE,message=FALSE}
+final_table=info[c(1,2,7)]%>%dcast(T2~T1)
+knitr::kable(final_table)
+```
+
